@@ -6,6 +6,8 @@ import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.media.MediaPlayer;
+import android.os.Build;
+import android.os.Environment;
 import android.os.IBinder;
 import android.support.annotation.Nullable;
 import android.support.v4.app.NotificationCompat;
@@ -21,6 +23,7 @@ import org.fourthline.cling.model.meta.LocalService;
 
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
+import java.io.File;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Timer;
@@ -56,6 +59,22 @@ public class AppService extends Service {
     public int onStartCommand(Intent intent, int flags, int startId) {
 
         new Thread().run();
+
+        File dir;
+        System.err.println(Build.BRAND);
+        if (Build.BRAND.toString().equals("htc_europe")) {
+            dir = new File("/mnt/emmc/AudioPlayer/");
+        }
+        else {
+            dir = new File(Environment.getExternalStorageDirectory().getPath() + "/AudioPlayer/");
+        }
+
+        while (!dir.exists()) {
+            dir.mkdir();
+            dir.setReadable(true);
+            dir.setExecutable(true);
+            dir.setWritable(true);
+        }
 
         service = new ServiceUpnp();
         mediaPlayer = new MediaPlayer();
