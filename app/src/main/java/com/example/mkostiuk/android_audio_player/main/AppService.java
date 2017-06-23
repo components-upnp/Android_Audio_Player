@@ -5,12 +5,26 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.media.MediaPlayer;
 import android.os.IBinder;
 import android.support.annotation.Nullable;
 import android.support.v4.app.NotificationCompat;
 import android.support.v4.app.NotificationManagerCompat;
 
 import com.example.mkostiuk.android_audio_player.R;
+import com.example.mkostiuk.android_audio_player.audio.LecteurAudioThread;
+import com.example.mkostiuk.android_audio_player.upnp.AudioFileService;
+import com.example.mkostiuk.android_audio_player.upnp.ServiceUpnp;
+
+import org.fourthline.cling.android.AndroidUpnpServiceImpl;
+import org.fourthline.cling.model.meta.LocalService;
+
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Timer;
+import java.util.TimerTask;
 
 import xdroid.toaster.Toaster;
 
@@ -24,6 +38,14 @@ public class AppService extends Service {
 
     public static final String ACTION_1 = "action_1";
 
+    private ServiceUpnp service;
+    private LocalService<AudioFileService> audioFileService;
+    private String pathCurrentFile;
+    private MediaPlayer mediaPlayer;
+    private ArrayList<Thread> fileAudio;
+    private Thread lectureCourante;
+    private boolean isPlaying = false;
+
     @Nullable
     @Override
     public IBinder onBind(Intent intent) {
@@ -35,7 +57,75 @@ public class AppService extends Service {
 
         new Thread().run();
 
+        service = new ServiceUpnp();
+        mediaPlayer = new MediaPlayer();
+
+        getApplicationContext().bindService(new Intent(this, AndroidUpnpServiceImpl.class),
+                service.getService(),
+                Context.BIND_AUTO_CREATE);
+
+        audioFileService = service.getRecorderLocalService();
+        fileAudio = new ArrayList<>();
+
+        Timer t = new Timer();
+        t.schedule(new TimerTask() {
+            @Override
+            public void run() {
+                set();
+
+                //On arrete le service au bout de deux heures
+                Timer t = new Timer();
+                t.schedule(new TimerTask() {
+                    @Override
+                    public void run() {
+                        onDestroy();
+                    }
+                }, 2 * 60 * 60 * 1000);
+            }
+        }, 5000);
+
         return START_NOT_STICKY;
+    }
+
+    private void set() {
+        mediaPlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
+            @Override
+            public void onCompletion(MediaPlayer mp) {
+                Toaster.toast("Test fin lecture!!!");
+
+                mediaPlayer.stop();
+                mediaPlayer.reset();
+
+                //Si des fichiers sont en attente de lecture, on passe au suivant
+                if (!fileAudio.isEmpty()) {
+                    Toaster.toast("Lecture fichier: "+pathCurrentFile);
+                    lectureCourante = fileAudio.remove(0);
+                    lectureCourante.start();
+                    isPlaying = true;
+                }
+                else {  //sinon on stoppe les lectures et on attend
+                    isPlaying = false;
+                }
+            }
+        });
+
+        audioFileService.getManager().getImplementation().getPropertyChangeSupport()
+                .addPropertyChangeListener(new PropertyChangeListener() {
+                    @Override
+                    public void propertyChange(PropertyChangeEvent evt) {
+                        if (evt.getPropertyName().equals("path")) {
+                            HashMap<String,String> args = (HashMap<String, String>) evt.getNewValue();
+                            pathCurrentFile = args.get("FILEPATH");
+                            fileAudio.add(new LecteurAudioThread(pathCurrentFile, mediaPlayer));
+
+                            if (! isPlaying) {
+                                isPlaying = true;
+                                lectureCourante = fileAudio.remove(0);
+                                lectureCourante.start();
+                            }
+                        }
+                    }
+                });
     }
 
     //fonction permettant d'afficher une notification test à l'utilisateur lors d'un évènement
