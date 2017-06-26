@@ -83,7 +83,7 @@ public class AppService extends Service {
                 service.getService(),
                 Context.BIND_AUTO_CREATE);
 
-        audioFileService = service.getRecorderLocalService();
+
         fileAudio = new ArrayList<>();
 
         Timer t = new Timer();
@@ -107,6 +107,11 @@ public class AppService extends Service {
     }
 
     private void set() {
+
+        audioFileService = service.getRecorderLocalService();
+
+        displayNotification(this);
+
         mediaPlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
             @Override
             public void onCompletion(MediaPlayer mp) {
